@@ -8,6 +8,7 @@ import random
 import re
 import socket
 import struct
+import subprocess
 import sys
 import time
 
@@ -214,3 +215,38 @@ def get_random_port():
                 raise e
 
     raise Exception("Could not find open port to listen on!")
+
+
+def find_module_json(dir: str, target: str) -> dict:
+    """R-parse dirs searching for specific files"""
+    for root, dirs, files in os.walk(dir):
+        for file in files:
+            if file == target:
+                with open(os.path.join(root, file)) as f:
+                    data = json.load(f)
+                    yield data
+
+
+def run_npm(
+    pkgdir: str,
+    cmd: str,
+    prefix: str,
+    args: str,
+    npm_bin: str = "npm",
+    wait: bool = True,
+):
+    """Run npm command"""
+    command = [npm_bin, cmd, prefix, args]
+
+    if wait:
+        return subprocess.call(
+            command,
+            cwd=pkgdir,
+        )
+    else:
+        return subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=pkgdir,
+        )

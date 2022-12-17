@@ -1,3 +1,9 @@
+import platform
+import typing
+from enum import Enum
+import pydantic
+
+
 class Defaults:
     module = None
     module_args = None
@@ -46,3 +52,30 @@ class Defaults:
             "password": self.oss_password,
         }
         return kwargs
+
+
+# State dir structure
+class StateDir(Enum):
+    BIN = "bin"
+    CFG = "cfg"
+    MOD = "mod"
+    LOG = "log"
+    RDB = "rdb"
+    RUN = "run"
+
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.value, cls))
+
+
+# Module model
+class Module(pydantic.BaseModel):
+    name: str
+    version: str
+    platform: typing.Optional[str] = None
+
+    @pydantic.validator("platform", pre=True, always=True)
+    def default_platform(cls, v):
+        if not v:
+            return platform.system()
+        return v

@@ -1,12 +1,13 @@
 import os
 import pickle
+import subprocess
 from functools import partial
 from typing import Optional
 
 import typer
 from rich.console import Console
 
-from redisero import __app_name__, __version__, cluster, schemas
+from redisero import __app_name__, __version__, cluster, loader, schemas
 
 app = typer.Typer()
 console = Console()
@@ -14,7 +15,23 @@ console = Console()
 REDIS_BINARY = os.environ.get("REDIS_BINARY", "redis-server")
 RUN_STATE = "/remstate"
 ROOT_DIR = os.path.abspath(os.getcwd()) + RUN_STATE
-INIT_FOLDERS = ("bin", "cfg", "mod", "log", "rdb", "run")
+
+
+@app.command()
+def loadmodules(
+    cfg_path: str = typer.Option(
+        f"{ROOT_DIR}/{schemas.StateDir.CFG.value}/modules.yml",
+        help="Path to module requirements fil.",
+    ),
+    state_dir_path: str = typer.Option(ROOT_DIR, help="Path to redisero state folder."),
+):
+    ml = loader.ModuleLoader(
+        cfg_path=cfg_path,
+        state_dir_path=state_dir_path,
+    )
+    ml.load_config()
+    ml.download_module_packages()
+    ml.extract_modules()
 
 
 @app.command()
@@ -22,7 +39,7 @@ def init():
     concat_root_path = partial(os.path.join, ROOT_DIR)
     make_directory = partial(os.makedirs, exist_ok=True)
 
-    for path_items in map(concat_root_path, INIT_FOLDERS):
+    for path_items in map(concat_root_path, schemas.StateDir.list()):
         make_directory(path_items)
 
 
@@ -50,33 +67,40 @@ def start(
     )
     cluster_env.startEnv()
 
-    with open(f"{ROOT_DIR}/run/cluster_env.pickle", "wb") as pfile:
+    with open(
+        f"{ROOT_DIR}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "wb"
+    ) as pfile:
         pickle.dump(cluster_env, pfile, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 @app.command()
 def stop():
     root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(f"{root_directory}/run/cluster_env.pickle", "rb") as handle:
+    with open(
+        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
+    ) as handle:
         cluster_env = pickle.load(handle)
     cluster_env.stopEnv()
-    os.remove(f"{root_directory}/run/cluster_env.pickle")
+    os.remove(f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle")
 
 
 @app.command()
 def info():
     root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(f"{root_directory}/run/cluster_env.pickle", "rb") as handle:
+    with open(
+        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
+    ) as handle:
         cluster_env = pickle.load(handle)
     cluster_env.printEnvData()
 
 
 @app.command()
 def cli(sh, cmd):
-    import subprocess
 
     root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(f"{root_directory}/run/cluster_env.pickle", "rb") as handle:
+    with open(
+        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
+    ) as handle:
         cluster_env = pickle.load(handle)
     for shard in cluster_env.shards:
         if str(shard.masterServerId) == str(sh):

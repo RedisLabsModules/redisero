@@ -15,6 +15,7 @@ console = Console()
 REDIS_BINARY = os.environ.get("REDIS_BINARY", "redis-server")
 RUN_STATE = "/remstate"
 ROOT_DIR = os.path.abspath(os.getcwd()) + RUN_STATE
+REDIS_RUN_STATE_PATH = f"{ROOT_DIR}/{schemas.StateDir.RUN.value}/cluster_env.pickle"
 
 
 @app.command()
@@ -47,7 +48,15 @@ def init():
 def start(
     shards: int = typer.Option(1, help="Number of shards"),
     with_replicas: bool = typer.Option(0, help="Use slaves"),
+    cfg_path: str = typer.Option(
+        f"{ROOT_DIR}/{schemas.StateDir.CFG.value}/modules.yml",
+        help="Path to module requirements file.",
+    ),
+    state_dir_path: str = typer.Option(ROOT_DIR, help="Path to redisero state folder."),
 ):
+    if os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster already running")
+        return
 
     modules_dir = ROOT_DIR + "/mod/"
     default_args = schemas.Defaults().getKwargs()
@@ -57,6 +66,15 @@ def start(
             modules_dir + redis_module for redis_module in redis_modules
         ]
 
+    ml = loader.ModuleLoader(
+        cfg_path=cfg_path,
+        state_dir_path=state_dir_path,
+    )
+    ml.load_config()
+    ml.download_module_packages()
+    # add cache for already downloaded s3 files
+    ml.extract_modules()
+
     cluster_env = cluster.ClusterEnv(
         remstate=ROOT_DIR,
         shardsCount=shards,
@@ -65,6 +83,7 @@ def start(
         randomizePorts=schemas.Defaults.randomize_ports,
         **default_args,
     )
+    console.print("Starting redis cluster")
     cluster_env.startEnv()
 
     with open(
@@ -75,32 +94,31 @@ def start(
 
 @app.command()
 def stop():
-    root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(
-        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
-    ) as handle:
+    if not os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster is not running")
+        return
+    with open(REDIS_RUN_STATE_PATH, "rb") as handle:
         cluster_env = pickle.load(handle)
     cluster_env.stopEnv()
-    os.remove(f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle")
+    os.remove(REDIS_RUN_STATE_PATH)
 
 
 @app.command()
 def info():
-    root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(
-        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
-    ) as handle:
+    if not os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster is not running")
+        return
+    with open(REDIS_RUN_STATE_PATH, "rb") as handle:
         cluster_env = pickle.load(handle)
     cluster_env.printEnvData()
 
 
 @app.command()
 def cli(sh, cmd):
-
-    root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(
-        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
-    ) as handle:
+    if not os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster is not running")
+        return
+    with open(REDIS_RUN_STATE_PATH, "rb") as handle:
         cluster_env = pickle.load(handle)
     for shard in cluster_env.shards:
         if str(shard.masterServerId) == str(sh):

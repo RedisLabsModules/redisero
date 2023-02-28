@@ -12,6 +12,8 @@ import subprocess
 import sys
 import time
 
+import redisero.os_platform as pf
+
 import redis
 
 
@@ -222,6 +224,12 @@ def find_folder(name, path):
         if name in dirs:
             return os.path.join(root, name)
     return None
+
+
+def list_files(path):
+    for root, directories, files in os.walk(path):
+        for filename in files:
+            yield os.path.join(root, filename)
 
 
 def run_npm(

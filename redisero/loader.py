@@ -50,11 +50,11 @@ class ModuleLoader:
             )
 
     def extract_modules(self) -> None:
+        """Download Redis modules based on npm package metadata"""
+
         package_path = (
             f"{self.state_dir_path}/{StateDir.MOD.value}/{MODULE_PACKAGE_DEFAULT_NAME}"
         )
-        """Download Redis modules based on npm package metadata"""
-
         for module in self.modules:
             if "/" in module.name:
                 package_name = module.name.split("/")[-1]
@@ -66,12 +66,22 @@ class ModuleLoader:
 
             with open(f"{package_folder}/{NPM_METADATA_FILE}") as f:
                 module_data = json.load(f)
-                # select OS
-                r_module = module_data["platform"][module.platform]
 
+                target_platform = None
+                module_platforms = module_data["platform"]
+                console.print("Available versions:")
+                for platform in module_platforms:
+                    print(platform)
+                    if module.platform.lower() == platform.lower():
+                        target_platform = platform
+
+                if not target_platform:
+                    continue
+
+                target_module = module_data["platform"][target_platform]
                 # download module by s3 link
-                console.print(f"Downloading [cyan]{module.name}[/cyan] module")
-                response = requests.get(r_module["path"])
+                console.print(f"Downloading [cyan]{target_platform}[/cyan] version.")
+                response = requests.get(target_module["path"])
                 with open(
                     package_path,
                     "wb",
@@ -79,15 +89,14 @@ class ModuleLoader:
                     f.write(response.content)
 
                 # extract module .so file from archive
-                console.print(f"Extracting [cyan]{r_module['name']}[/cyan] module")
+                console.print(f"Extracting [cyan]{target_module['name']}[/cyan] file")
                 with zipfile.ZipFile(
                     package_path,
                     "r",
                 ) as zip_ref:
                     zip_ref.extract(
-                        # module_data["name"], todo module names
-                        "module-enterprise.so",
-                        path=f"{self.state_dir_path}/{StateDir.MOD.value}/",
+                        target_module["name"], 
+                        path=f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}",
                     )
 
                 # remove tmp archive
@@ -95,6 +104,6 @@ class ModuleLoader:
 
                 # make modules file executable
                 os.chmod(
-                    f"{self.state_dir_path}/{StateDir.MOD.value}/module-enterprise.so",
+                    f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}/{target_module['name']}",
                     0o777,
                 )

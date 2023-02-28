@@ -8,7 +8,8 @@ import psutil
 import redis
 from rich.console import Console
 
-from redisero.utils import fix_modules, fix_modulesArgs, get_random_port, wait_for_conn
+from redisero.utils import (fix_modules, fix_modulesArgs, get_random_port,
+                            wait_for_conn)
 
 MASTER = "master"
 SLAVE = "slave"
@@ -236,9 +237,6 @@ class StandardEnv(object):
             if self._getRedisVersion() > 70000:
                 cmdArgs += ["--enable-debug-command", "yes"]
 
-        if self.verbose:
-            console.print("[cyan]Run command[/cyan]")
-            console.print_json(cmdArgs)
         return cmdArgs
 
     def createCmdOSEnv(self, role):
@@ -316,7 +314,7 @@ class StandardEnv(object):
         }
 
         if self.verbose:
-            console.print("Redis master command: " + " ".join(self.masterCmdArgs))
+            console.print("[cyan]Redis master command:[/cyan] " + " ".join(self.masterCmdArgs))
         if masters and self.masterProcess is None:
             self.masterProcess = subprocess.Popen(
                 args=self.masterCmdArgs, env=self.masterOSEnv, **options
@@ -350,7 +348,6 @@ class StandardEnv(object):
         p0 = psutil.Process(pid=pid)
         pchi = p0.children(recursive=True)
         for p in pchi:
-            print(1)
             try:
                 p.terminate()
                 exit_code = p.wait(timeout=3)

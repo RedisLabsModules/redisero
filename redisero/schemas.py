@@ -1,7 +1,9 @@
-import platform
 import typing
 from enum import Enum
+
 import pydantic
+
+import redisero.os_platform
 
 
 class Defaults:
@@ -23,7 +25,6 @@ class Defaults:
     no_capture_output = False
     no_log = False
     exit_on_failure = False
-    verbose = 0
     logdir = None
     use_slaves = False
     num_shards = 1
@@ -48,7 +49,6 @@ class Defaults:
             "sanitizer": self.sanitizer,
             "noCatch": self.no_capture_output,
             "noLog": self.no_log,
-            "verbose": self.verbose,
             "password": self.oss_password,
         }
         return kwargs
@@ -71,11 +71,12 @@ class StateDir(Enum):
 # Module model
 class Module(pydantic.BaseModel):
     name: str
-    version: str
+    version: typing.Optional[str] = None
     platform: typing.Optional[str] = None
 
     @pydantic.validator("platform", pre=True, always=True)
     def default_platform(cls, v):
         if not v:
-            return platform.system()
+            platform = redisero.os_platform.Platform()
+            return f"{platform.osnick}-{platform.arch}"
         return v

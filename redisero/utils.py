@@ -217,14 +217,17 @@ def get_random_port():
     raise Exception("Could not find open port to listen on!")
 
 
-def find_module_json(dir: str, target: str) -> dict:
-    """R-parse dirs searching for specific files"""
-    for root, dirs, files in os.walk(dir):
-        for file in files:
-            if file == target:
-                with open(os.path.join(root, file)) as f:
-                    data = json.load(f)
-                    yield data
+def find_folder(name, path):
+    for root, dirs, files in os.walk(path):
+        if name in dirs:
+            return os.path.join(root, name)
+    return None
+
+
+def list_files(path):
+    for root, directories, files in os.walk(path):
+        for filename in files:
+            yield os.path.join(root, filename)
 
 
 def run_npm(
@@ -233,20 +236,13 @@ def run_npm(
     prefix: str,
     args: str,
     npm_bin: str = "npm",
-    wait: bool = True,
 ):
     """Run npm command"""
     command = [npm_bin, cmd, prefix, args]
 
-    if wait:
-        return subprocess.call(
-            command,
-            cwd=pkgdir,
-        )
-    else:
-        return subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            cwd=pkgdir,
-        )
+    return subprocess.call(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        cwd=pkgdir,
+    )

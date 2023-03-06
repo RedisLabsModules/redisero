@@ -1,5 +1,6 @@
 import os
 import pickle
+import re
 import subprocess
 from functools import partial
 from typing import Optional
@@ -7,7 +8,8 @@ from typing import Optional
 import typer
 from rich.console import Console
 
-from redisero import __app_name__, __version__, cluster, loader, schemas
+from redisero import (__app_name__, __version__, cluster, loader, os_platform,
+                      schemas, utils)
 
 app = typer.Typer()
 console = Console()
@@ -15,6 +17,7 @@ console = Console()
 REDIS_BINARY = os.environ.get("REDIS_BINARY", "redis-server")
 RUN_STATE = "/remstate"
 ROOT_DIR = os.path.abspath(os.getcwd()) + RUN_STATE
+REDIS_RUN_STATE_PATH = f"{ROOT_DIR}/{schemas.StateDir.RUN.value}/cluster_env.pickle"
 
 
 @app.command()
@@ -47,24 +50,48 @@ def init():
 def start(
     shards: int = typer.Option(1, help="Number of shards"),
     with_replicas: bool = typer.Option(0, help="Use slaves"),
+    cfg_path: str = typer.Option(
+        f"{ROOT_DIR}/{schemas.StateDir.CFG.value}/modules.yml",
+        help="Path to module requirements file.",
+    ),
+    state_dir_path: str = typer.Option(ROOT_DIR, help="Path to redisero state folder."),
+    verbose: bool = typer.Option(0, help="Verbose mod"),
 ):
+    if os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster already running")
+        return
 
     modules_dir = ROOT_DIR + "/mod/"
     default_args = schemas.Defaults().getKwargs()
     default_args["useSlaves"] = with_replicas
-    if redis_modules := os.listdir(modules_dir):
-        default_args["modulePath"] = [
-            modules_dir + redis_module for redis_module in redis_modules
-        ]
+    default_args["modulePath"] = []
+    platform  = os_platform.Platform()
+    signature = f"{platform.osnick}-{platform.arch}"
+    pattern = r".*/([a-z]+-(i386|x86_64|arm64v8|armv7l))/.*"
 
+    ml = loader.ModuleLoader(
+        cfg_path=cfg_path,
+        state_dir_path=state_dir_path,
+    )
+    ml.load_config()
+    ml.download_module_packages()
+    ml.extract_modules()
+
+    for file_path in utils.list_files(modules_dir):
+        if re.search(pattern, file_path) and signature not in file_path:
+            continue
+        default_args["modulePath"].append(file_path)
+            
     cluster_env = cluster.ClusterEnv(
         remstate=ROOT_DIR,
         shardsCount=shards,
         redisBinaryPath=REDIS_BINARY,
         outputFilesFormat="%s-test",
         randomizePorts=schemas.Defaults.randomize_ports,
+        verbose=verbose,
         **default_args,
     )
+    console.print("Starting redis cluster")
     cluster_env.startEnv()
 
     with open(
@@ -75,32 +102,31 @@ def start(
 
 @app.command()
 def stop():
-    root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(
-        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
-    ) as handle:
+    if not os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster is not running")
+        return
+    with open(REDIS_RUN_STATE_PATH, "rb") as handle:
         cluster_env = pickle.load(handle)
     cluster_env.stopEnv()
-    os.remove(f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle")
+    os.remove(REDIS_RUN_STATE_PATH)
 
 
 @app.command()
 def info():
-    root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(
-        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
-    ) as handle:
+    if not os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster is not running")
+        return
+    with open(REDIS_RUN_STATE_PATH, "rb") as handle:
         cluster_env = pickle.load(handle)
     cluster_env.printEnvData()
 
 
 @app.command()
 def cli(sh, cmd):
-
-    root_directory = os.path.abspath(os.getcwd()) + RUN_STATE
-    with open(
-        f"{root_directory}/{schemas.StateDir.RUN.value}/cluster_env.pickle", "rb"
-    ) as handle:
+    if not os.path.exists(REDIS_RUN_STATE_PATH):
+        console.print(f"Redis cluster is not running")
+        return
+    with open(REDIS_RUN_STATE_PATH, "rb") as handle:
         cluster_env = pickle.load(handle)
     for shard in cluster_env.shards:
         if str(shard.masterServerId) == str(sh):

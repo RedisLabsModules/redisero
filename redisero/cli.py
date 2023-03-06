@@ -66,8 +66,8 @@ def start(
     default_args["useSlaves"] = with_replicas
     default_args["modulePath"] = []
     platform  = os_platform.Platform()
-    signature = f"{platform.os}-{platform.dist}-{platform.os_ver}-{platform.arch}"
-    pattern = r".*/([a-z]+-[a-z]+-\d+\.\d+-(i386|x86_64|arm64v8|armv7l))/.*"
+    signature = f"{platform.osnick}-{platform.arch}"
+    pattern = r".*/([a-z]+-(i386|x86_64|arm64v8|armv7l))/.*"
 
     ml = loader.ModuleLoader(
         cfg_path=cfg_path,

@@ -78,5 +78,5 @@ class Module(pydantic.BaseModel):
     def default_platform(cls, v):
         if not v:
             platform = redisero.os_platform.Platform()
-            return f"{platform.os}-{platform.dist}-{platform.os_ver}-{platform.arch}"
+            return f"{platform.osnick}-{platform.arch}"
         return v

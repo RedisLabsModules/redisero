@@ -12,8 +12,6 @@ import subprocess
 import sys
 import time
 
-import redisero.os_platform as pf
-
 import redis
 
 

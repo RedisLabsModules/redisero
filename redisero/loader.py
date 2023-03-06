@@ -11,6 +11,7 @@ from .schemas import Module, StateDir
 
 console = Console()
 MODULE_PACKAGE_DEFAULT_NAME = "module.zip"
+MODULE_METADATA_FILE = "module.json"
 NPM_METADATA_FILE = "modules.json"
 
 
@@ -89,21 +90,38 @@ class ModuleLoader:
                     f.write(response.content)
 
                 # extract module .so file from archive
-                console.print(f"Extracting [cyan]{target_module['name']}[/cyan] file")
+                console.print(f"Extracting files")
                 with zipfile.ZipFile(
                     package_path,
                     "r",
                 ) as zip_ref:
                     zip_ref.extract(
-                        target_module["name"], 
+                        MODULE_METADATA_FILE,
                         path=f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}",
                     )
+
+                    # get module file name from the module metadata file
+                    with open(
+                        f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}/{MODULE_METADATA_FILE}"
+                    ) as f:
+                        data = json.load(f)
+                        module_file = data["module_file"]
+
+                    zip_ref.extract(
+                        module_file,
+                        path=f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}",
+                    )
+
+                # remove module metadata file
+                os.remove(
+                    f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}/{MODULE_METADATA_FILE}"
+                )
 
                 # remove tmp archive
                 os.remove(package_path)
 
                 # make modules file executable
                 os.chmod(
-                    f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}/{target_module['name']}",
+                    f"{self.state_dir_path}/{StateDir.MOD.value}/{module.platform.lower()}/{module_file}",
                     0o777,
                 )
